@@ -77,9 +77,9 @@ def dividing_bin(image: Image.Image, n=16):
     for color in bins:
         idx = tuple([c // channel_len for c in color])
         weights[idx] += bins[color]
-        # lab_color = RGBtoLAB(color)
+        lab_color = RGBtoLAB(color)
         for i in range(3):
-            wght_sum[idx][i] += color[i] * bins[color]
+            wght_sum[idx][i] += lab_color[i] * bins[color]
     # calculate color means and weights, and represent them in lab space
     res = {}
     for idx in weights:
@@ -87,7 +87,7 @@ def dividing_bin(image: Image.Image, n=16):
             continue
         for i in range(3):
             wght_sum[idx][i] /= weights[idx]
-        res[RGBtoLAB(tuple(wght_sum[idx]))] = weights[idx]
+        res[tuple(wght_sum[idx])] = weights[idx]
 
     return res
 
