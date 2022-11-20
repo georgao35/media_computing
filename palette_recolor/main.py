@@ -14,13 +14,21 @@ class PaletteOp(QLabel):
 
     def __init__(self, parent=None, flags=Qt.WindowFlags()):
         super(PaletteOp, self).__init__(parent, flags)
-        self.color = None
+        self.color = 'ffffff'
+        self.setStyleSheet("background-color: #ffffff")
+        self.setMaximumSize(100, 100)
+        self.setMinimumSize(100, 100)
 
     def mousePressEvent(self, ev: QMouseEvent) -> None:
-        color = QColorDialog
+        color = QColorDialog.getColor()
+        print(color)
+        if not color.isValid():
+            return
+        self.setColor(color)
 
     def setColor(self, color):
         self.color = color
+        self.setStyleSheet(f'background-color: #{color}')
         # self.setPixmap(QPixmap.fromImage(ImageQt.ImageQt()))
 
 
@@ -41,15 +49,15 @@ class PaletteRecoloring(QWidget):
         qr = self.frameGeometry()
         qr.moveCenter(QDesktopWidget().availableGeometry().center())
         self.move(qr.topLeft())
-        # label for image
+        # labels for images
         self.img_label = QLabel(self)
         self.orig_img_label = QLabel(self)
-        # palettes
-        palettes = []
+        # labels for palettes
+        self.palettes = []
         palettes_layout = QVBoxLayout()
         for i in range(self.k):
             p = PaletteOp(self)
-            palettes.append(p)
+            self.palettes.append(p)
             palettes_layout.addWidget(p)
         # buttons
         load_img_btn = QPushButton('Load Image', self)
@@ -84,14 +92,17 @@ class PaletteRecoloring(QWidget):
         if file_name == '':
             return
         im = Image.open(file_name)
-        img_rgb = im.resize((round(im.size[0]*450/im.size[1]), round(im.size[1]*450/im.size[1])),
-                            Image.Resampling.LANCZOS)
-        img_rgb = img_rgb.convert("RGBA")
-        self.image = img_rgb
-        self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)))
-        self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)))
-        palettes = build_palettes(img_rgb, self.k, self.bins)
-
+        # im = im.resize((round(im.size[0] * 450 / im.size[1]), round(im.size[1] * 450 / im.size[1])),
+        #                       Image.ANTIALIAS)
+        img_rgb = im.convert("RGBA")
+        self.image = im
+        self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
+        self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
+        # get the palettes based on knn
+        palettes_colors = build_palettes(self.image, self.k, self.bins)
+        for palette, color in zip(self.palettes, palettes_colors):
+            palette.setColor(color)
+        print(palettes_colors)
 
     def save_image(self):
         file_name = QFileDialog.getSaveFileName()[0]
