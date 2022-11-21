@@ -8,6 +8,13 @@ from PyQt5.QtGui import QMouseEvent, QPixmap
 from PyQt5.QtCore import Qt, QCoreApplication
 
 from palette import build_palettes
+from utils import RGBtoLAB, LABtoRGB
+
+
+def get_draw_color(color):
+    # convert the color space and represent in hex
+    color = LABtoRGB(color)
+    return f'{round(color[0]):02x}{round(color[1]):02x}{round(color[2]):02x}'
 
 
 class PaletteOp(QLabel):
@@ -26,9 +33,10 @@ class PaletteOp(QLabel):
             return
         self.setColor(color)
 
+
     def setColor(self, color):
         self.color = color
-        self.setStyleSheet(f'background-color: #{color}')
+        self.setStyleSheet(f'background-color: #{get_draw_color(color)}')
         # self.setPixmap(QPixmap.fromImage(ImageQt.ImageQt()))
 
 
@@ -95,9 +103,9 @@ class PaletteRecoloring(QWidget):
         # im = im.resize((round(im.size[0] * 450 / im.size[1]), round(im.size[1] * 450 / im.size[1])),
         #                       Image.ANTIALIAS)
         img_rgb = im.convert("RGBA")
-        self.image = im
+        self.image = im.convert("RGB")
         self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
-        self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
+        # self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
         # get the palettes based on knn
         palettes_colors = build_palettes(self.image, self.k, self.bins)
         for palette, color in zip(self.palettes, palettes_colors):
