@@ -1,4 +1,19 @@
 import math
+import numpy as np
+
+from PIL import ImageCms
+
+
+def rgb_img_to_lab(image):
+    RGB_p = ImageCms.createProfile('sRGB')
+    LAB_p = ImageCms.createProfile('LAB')
+    return ImageCms.profileToProfile(image, RGB_p, LAB_p, outputMode='LAB')
+
+
+def lab_img_to_rgb(image):
+    RGB_p = ImageCms.createProfile('sRGB')
+    LAB_p = ImageCms.createProfile('LAB')
+    return ImageCms.profileToProfile(image, LAB_p, RGB_p, outputMode='RGB')
 
 
 def LABtoXYZ(LAB):
@@ -11,7 +26,7 @@ def LABtoXYZ(LAB):
     X = 95.047 * f((L + 16) / 116 + a / 500)
     Y = 100.000 * f((L + 16) / 116)
     Z = 108.883 * f((L + 16) / 116 - b / 200)
-    return (X, Y, Z)
+    return X, Y, Z
 
 
 def XYZtoRGB(XYZ):
@@ -22,7 +37,7 @@ def XYZtoRGB(XYZ):
     R = f(3.2406 * X + -1.5372 * Y + -0.4986 * Z) * 255
     G = f(-0.9689 * X + 1.8758 * Y + 0.0415 * Z) * 255
     B = f(0.0557 * X + -0.2040 * Y + 1.0570 * Z) * 255
-    return (R, G, B)
+    return tuple(np.clip((R, G, B), a_min=0, a_max=255))
 
 
 def LABtoRGB(LAB):
@@ -39,7 +54,7 @@ def RGBtoXYZ(RGB):
     X = (0.4124 * R + 0.3576 * G + 0.1805 * B) * 100
     Y = (0.2126 * R + 0.7152 * G + 0.0722 * B) * 100
     Z = (0.0193 * R + 0.1192 * G + 0.9505 * B) * 100
-    return (X, Y, Z)
+    return X, Y, Z
 
 
 def XYZtoLAB(XYZ):
@@ -54,7 +69,7 @@ def XYZtoLAB(XYZ):
     L = 116 * f(Y) - 16
     a = 500 * (f(X) - f(Y))
     b = 200 * (f(Y) - f(Z))
-    return (L, a, b)
+    return tuple(np.clip((L, a, b), a_min=[0, -128, -128], a_max=[100, 128, 128]))
 
 
 def RGBtoLAB(RGB):

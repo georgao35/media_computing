@@ -4,40 +4,42 @@ from PIL import Image, ImageQt
 
 from PyQt5.QtWidgets import (QFileDialog, QWidget, QLabel, QApplication, QDesktopWidget, QPushButton, QHBoxLayout,
                              QVBoxLayout, QColorDialog)
-from PyQt5.QtGui import QMouseEvent, QPixmap
+from PyQt5.QtGui import QMouseEvent, QPixmap, QColor
 from PyQt5.QtCore import Qt, QCoreApplication
 
 from palette import build_palettes
+from recolor import modify_lumin
 from utils import RGBtoLAB, LABtoRGB
 
 
 def get_draw_color(color):
     # convert the color space and represent in hex
-    color = LABtoRGB(color)
     return f'{round(color[0]):02x}{round(color[1]):02x}{round(color[2]):02x}'
 
 
 class PaletteOp(QLabel):
 
-    def __init__(self, parent=None, flags=Qt.WindowFlags()):
+    def __init__(self, idx=-1, parent=None, flags=Qt.WindowFlags()):
+        # the label class for palettes. colors are stored in RGB tuples
         super(PaletteOp, self).__init__(parent, flags)
-        self.color = 'ffffff'
+        self.color = [255, 255, 255]
+        self.palette_idx = idx
         self.setStyleSheet("background-color: #ffffff")
         self.setMaximumSize(100, 100)
         self.setMinimumSize(100, 100)
 
     def mousePressEvent(self, ev: QMouseEvent) -> None:
-        color = QColorDialog.getColor()
-        print(color)
+        color = QColorDialog.getColor(initial=QColor(*self.color))
         if not color.isValid():
             return
-        self.setColor(color)
-
+        self.setColor(color.getRgb()[:3])
+        if isinstance(self.parent(), PaletteRecoloring):
+            self.parent().recolor(self.palette_idx, self.color)
 
     def setColor(self, color):
         self.color = color
-        self.setStyleSheet(f'background-color: #{get_draw_color(color)}')
-        # self.setPixmap(QPixmap.fromImage(ImageQt.ImageQt()))
+        print(self.color)
+        self.setStyleSheet(f'background-color: #{get_draw_color(self.color)}')
 
 
 class PaletteRecoloring(QWidget):
@@ -62,9 +64,11 @@ class PaletteRecoloring(QWidget):
         self.orig_img_label = QLabel(self)
         # labels for palettes
         self.palettes = []
+        self.palettes_colors = []
         palettes_layout = QVBoxLayout()
         for i in range(self.k):
-            p = PaletteOp(self)
+            p = PaletteOp(i, self)
+            self.palettes_colors.append(p.color)
             self.palettes.append(p)
             palettes_layout.addWidget(p)
         # buttons
@@ -108,13 +112,22 @@ class PaletteRecoloring(QWidget):
         # self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
         # get the palettes based on knn
         palettes_colors = build_palettes(self.image, self.k, self.bins)
-        for palette, color in zip(self.palettes, palettes_colors):
-            palette.setColor(color)
-        print(palettes_colors)
+        for idx, (palette, color) in enumerate(zip(self.palettes, palettes_colors)):
+            palette.setColor(LABtoRGB(color))
+            self.palettes_colors[idx] = LABtoRGB(color)
 
     def save_image(self):
         file_name = QFileDialog.getSaveFileName()[0]
         print(file_name)
+
+    def recolor(self, palette_idx, palette_color):
+        print(f'recolor palette:{palette_idx} to {palette_color}')
+        # change the lumin
+        palettes_colors = modify_lumin(self.palettes_colors, palette_idx, palette_color)
+        # change the modified palettes' colors
+        for palette, color in zip(self.palettes, palettes_colors):
+            palette.setColor(color)
+        self.palettes_colors[:] = palettes_colors[:]
 
 
 # 按间距中的绿色按钮以运行脚本。

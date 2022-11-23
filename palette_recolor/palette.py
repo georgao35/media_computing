@@ -97,5 +97,5 @@ def build_palettes(image: Image.Image, k=5, bin_n=16):
     means = get_means(bins, k=k, random_init=False)
 
     res = k_means(means, bins)
-    print(res)
+
     return [color for color in res]
