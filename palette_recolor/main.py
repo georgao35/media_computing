@@ -8,7 +8,7 @@ from PyQt5.QtGui import QMouseEvent, QPixmap, QColor
 from PyQt5.QtCore import Qt, QCoreApplication
 
 from palette import build_palettes
-from recolor import modify_lumin
+from recolor import modify_lumin, image_recolor
 from utils import RGBtoLAB, LABtoRGB
 
 
@@ -108,8 +108,8 @@ class PaletteRecoloring(QWidget):
         #                       Image.ANTIALIAS)
         img_rgb = im.convert("RGBA")
         self.image = im.convert("RGB")
-        self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
-        # self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
+        # self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
+        self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
         # get the palettes based on knn
         palettes_colors = build_palettes(self.image, self.k, self.bins)
         for idx, (palette, color) in enumerate(zip(self.palettes, palettes_colors)):
@@ -127,7 +127,11 @@ class PaletteRecoloring(QWidget):
         # change the modified palettes' colors
         for palette, color in zip(self.palettes, palettes_colors):
             palette.setColor(color)
+        modified_img = image_recolor(self.image, self.palettes_colors, palettes_colors, palette_idx)
+        modified_img = modified_img.convert('RGB')
+        self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(modified_img)).scaledToHeight(500))
         self.palettes_colors[:] = palettes_colors[:]
+        modified_img.save('1.jpg')
 
 
 # 按间距中的绿色按钮以运行脚本。

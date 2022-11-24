@@ -2,18 +2,17 @@ import math
 import numpy as np
 
 from PIL import ImageCms
+from skimage import color
 
 
 def rgb_img_to_lab(image):
-    RGB_p = ImageCms.createProfile('sRGB')
-    LAB_p = ImageCms.createProfile('LAB')
-    return ImageCms.profileToProfile(image, RGB_p, LAB_p, outputMode='LAB')
+    img = np.array(image)
+    return color.rgb2lab(img)
 
 
 def lab_img_to_rgb(image):
-    RGB_p = ImageCms.createProfile('sRGB')
-    LAB_p = ImageCms.createProfile('LAB')
-    return ImageCms.profileToProfile(image, LAB_p, RGB_p, outputMode='RGB')
+    # return color.lab2rgb(image)
+    return (color.lab2rgb(image) * 255).astype(np.int8)
 
 
 def LABtoXYZ(LAB):
@@ -81,5 +80,17 @@ def ValidRGB(RGB):
 
 
 def ValidLAB(LAB):
-    L, a, b = LAB
+    L, a, b = LAB[0], LAB[1], LAB[2]
     return 0 <= L <= 100 and -128 <= a <= 127 and -128 <= b <= 127
+
+
+def GetBoundary(origin, d, k_min, k_max, iter_n=20):
+    start = origin + d * k_min
+    end = origin + d * k_max
+    for i in range(iter_n):
+        mid = (start + end) / 2
+        if ValidLAB(mid) and ValidRGB(LABtoRGB(mid)):
+            start = mid
+        else:
+            end = mid
+    return (start + end) / 2
