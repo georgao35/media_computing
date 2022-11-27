@@ -33,8 +33,8 @@ def k_means(means, bins, k=5, max_iter=1000, add_black=True):
             cluster_cnt[clust_idx] += cnt
         # calculate the mean as new group of centers
         means_update = np.nan_to_num(cluster_sum / cluster_cnt.reshape((6, 1)), nan=0.0)
-        if add_black:
-            means_update[-1] = np.array((0, -128, -128))
+        # if add_black:
+        #     means_update[-1] = np.array((0, -128, -128))
         # if converged, stop the loop
         if (means_update == means).all():
             break

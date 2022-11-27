@@ -65,12 +65,14 @@ class PaletteRecoloring(QWidget):
         # labels for palettes
         self.palettes = []
         self.palettes_colors = []
+        self.palettes_colors_cur = []
         palettes_layout = QVBoxLayout()
         for i in range(self.k):
             p = PaletteOp(i, self)
             self.palettes_colors.append(p.color)
             self.palettes.append(p)
             palettes_layout.addWidget(p)
+        self.palettes_colors_cur[:] = self.palettes_colors[:]
         # buttons
         load_img_btn = QPushButton('Load Image', self)
         load_img_btn.clicked.connect(self.load_image)
@@ -104,8 +106,8 @@ class PaletteRecoloring(QWidget):
         if file_name == '':
             return
         im = Image.open(file_name)
-        # im = im.resize((round(im.size[0] * 450 / im.size[1]), round(im.size[1] * 450 / im.size[1])),
-        #                       Image.ANTIALIAS)
+        im = im.resize((round(im.size[0] * 150 / im.size[1]), round(im.size[1] * 150 / im.size[1])),
+                              Image.ANTIALIAS)
         img_rgb = im.convert("RGBA")
         self.image = im.convert("RGB")
         # self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
@@ -114,7 +116,7 @@ class PaletteRecoloring(QWidget):
         palettes_colors = build_palettes(self.image, self.k, self.bins)
         for idx, (palette, color) in enumerate(zip(self.palettes, palettes_colors)):
             palette.setColor(LABtoRGB(color))
-            self.palettes_colors[idx] = LABtoRGB(color)
+            self.palettes_colors[idx] = tuple(color)
 
     def save_image(self):
         file_name = QFileDialog.getSaveFileName()[0]
@@ -123,14 +125,14 @@ class PaletteRecoloring(QWidget):
     def recolor(self, palette_idx, palette_color):
         print(f'recolor palette:{palette_idx} to {palette_color}')
         # change the lumin
-        palettes_colors = modify_lumin(self.palettes_colors, palette_idx, palette_color)
+        palettes_colors_lab = modify_lumin(self.palettes_colors, palette_idx, palette_color)
         # change the modified palettes' colors
-        for palette, color in zip(self.palettes, palettes_colors):
-            palette.setColor(color)
-        modified_img = image_recolor(self.image, self.palettes_colors, palettes_colors, palette_idx)
-        modified_img = modified_img.convert('RGB')
+        for palette, color in zip(self.palettes, palettes_colors_lab):
+            palette.setColor(LABtoRGB(color))
+        modified_img = image_recolor(self.image, self.palettes_colors, palettes_colors_lab, palette_idx)
+        # modified_img = modified_img.convert('RGB')
         self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(modified_img)).scaledToHeight(500))
-        self.palettes_colors[:] = palettes_colors[:]
+        self.palettes_colors[:] = palettes_colors_lab[:]
         modified_img.save('1.jpg')
 
 

@@ -1,3 +1,4 @@
+import copy
 import math
 import numpy as np
 
@@ -28,7 +29,7 @@ def LABtoXYZ(LAB):
     return X, Y, Z
 
 
-def XYZtoRGB(XYZ):
+def XYZtoRGB(XYZ, clip=True):
     def f(n):
         return n * 12.92 if n <= 0.0031308 else (n ** (1 / 2.4)) * 1.055 - 0.055
 
@@ -36,11 +37,11 @@ def XYZtoRGB(XYZ):
     R = f(3.2406 * X + -1.5372 * Y + -0.4986 * Z) * 255
     G = f(-0.9689 * X + 1.8758 * Y + 0.0415 * Z) * 255
     B = f(0.0557 * X + -0.2040 * Y + 1.0570 * Z) * 255
-    return tuple(np.clip((R, G, B), a_min=0, a_max=255))
+    return tuple(np.clip((R, G, B), a_min=0, a_max=255)) if clip else (R, G, B)
 
 
-def LABtoRGB(LAB):
-    return XYZtoRGB(LABtoXYZ(LAB))
+def LABtoRGB(LAB, clip=True):
+    return XYZtoRGB(LABtoXYZ(LAB), clip)
 
 
 def RGBtoXYZ(RGB):
@@ -56,7 +57,7 @@ def RGBtoXYZ(RGB):
     return X, Y, Z
 
 
-def XYZtoLAB(XYZ):
+def XYZtoLAB(XYZ, clip=True):
     def f(n):
         return n ** (1 / 3) if n > (6 / 29) ** 3 else (n / (3 * ((6 / 29) ** 2))) + (4 / 29)
 
@@ -68,11 +69,11 @@ def XYZtoLAB(XYZ):
     L = 116 * f(Y) - 16
     a = 500 * (f(X) - f(Y))
     b = 200 * (f(Y) - f(Z))
-    return tuple(np.clip((L, a, b), a_min=[0, -128, -128], a_max=[100, 128, 128]))
+    return tuple(np.clip((L, a, b), a_min=[0, -128, -128], a_max=[100, 128, 128])) if clip else (L, a, b)
 
 
-def RGBtoLAB(RGB):
-    return XYZtoLAB(RGBtoXYZ(RGB))
+def RGBtoLAB(RGB, clip=True):
+    return XYZtoLAB(RGBtoXYZ(RGB), clip)
 
 
 def ValidRGB(RGB):
@@ -84,12 +85,28 @@ def ValidLAB(LAB):
     return 0 <= L <= 100 and -128 <= a <= 127 and -128 <= b <= 127
 
 
-def GetBoundary(origin, d, k_min, k_max, iter_n=20):
-    start = origin + d * k_min
-    end = origin + d * k_max
+def InGamut(LAB):
+    return ValidLAB(LAB) and ValidRGB(LABtoRGB(LAB, False))
+
+
+def GetIntersect(o, n):
+    p1 = copy.deepcopy(o)
+    p2 = copy.deepcopy(n)
+    offset = p2 - p1
+    while InGamut(p2):
+        p1 += offset
+        p2 += offset
+    return GetBoundary(p1, p2)
+
+
+def GetBoundary(o, n, iter_n=20):
+    start = copy.deepcopy(o)
+    end = copy.deepcopy(n)
     for i in range(iter_n):
+        if np.linalg.norm(start - end) < 0.001:
+            break
         mid = (start + end) / 2
-        if ValidLAB(mid) and ValidRGB(LABtoRGB(mid)):
+        if InGamut(mid):
             start = mid
         else:
             end = mid
