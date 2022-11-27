@@ -17,7 +17,7 @@ def update_weight(x, target):
 def k_means(means, bins, k=5, max_iter=1000, add_black=True):
     if add_black:
         # add black into means
-        means.append((0, -128, -128))
+        means.append((0, 128, 128))
     means = np.array(means)
     mean_cnt = means.shape[0]
     # k-means loop
@@ -33,8 +33,8 @@ def k_means(means, bins, k=5, max_iter=1000, add_black=True):
             cluster_cnt[clust_idx] += cnt
         # calculate the mean as new group of centers
         means_update = np.nan_to_num(cluster_sum / cluster_cnt.reshape((6, 1)), nan=0.0)
-        # if add_black:
-        #     means_update[-1] = np.array((0, -128, -128))
+        if add_black:
+            means_update[-1] = np.array((0, 128, 128))
         # if converged, stop the loop
         if (means_update == means).all():
             break
@@ -51,15 +51,16 @@ def get_means(bins, k=5, random_init=True):
         return random.choices(list(bins.keys()), k=k)
     else:
         # improved k-means initialization
-        bins_count = sorted([(cnt, RGBtoLAB(color)) for color, cnt in bins.items()], reverse=True)
+        bins_count = sorted([[cnt, RGBtoLAB(color)] for color, cnt in bins.items()], reverse=True)
         # select k init means based on distance in LAB space
         means = []
         for i in range(k):
             origin = bins_count.pop(0)
             means.append(origin[1])
             # update weights and sort
-            bins_count = sorted(list(map(lambda x: (x[0] * update_weight(x[1], means[-1]), x[1]), bins_count)),
-                                reverse=True)
+            for j in range(len(bins_count)):
+                bins_count[j][0] *= update_weight(bins_count[j][1], origin[1])
+            bins_count.sort(reverse=True)
         return means
 
 

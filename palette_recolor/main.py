@@ -46,6 +46,7 @@ class PaletteRecoloring(QWidget):
 
     def __init__(self, k=5, bins=16):
         super(PaletteRecoloring, self).__init__()
+        self.modified_img = None
         self.image = None
         self.k = k
         self.bins = bins
@@ -60,7 +61,7 @@ class PaletteRecoloring(QWidget):
         qr.moveCenter(QDesktopWidget().availableGeometry().center())
         self.move(qr.topLeft())
         # labels for images
-        self.img_label = QLabel(self)
+        # self.img_label = QLabel(self)
         self.orig_img_label = QLabel(self)
         # labels for palettes
         self.palettes = []
@@ -82,6 +83,10 @@ class PaletteRecoloring(QWidget):
         save_img_btn.clicked.connect(self.save_image)
         save_img_btn.resize(save_img_btn.sizeHint())
 
+        recolor_img_btn = QPushButton('Recolor', self)
+        recolor_img_btn.clicked.connect(self.transfer)
+        recolor_img_btn.resize(recolor_img_btn.sizeHint())
+
         quit_btn = QPushButton('Quit', self)
         quit_btn.clicked.connect(QCoreApplication.instance().quit)
         quit_btn.resize(quit_btn.sizeHint())
@@ -89,11 +94,12 @@ class PaletteRecoloring(QWidget):
         # set layouts
         img_layout = QHBoxLayout()
         img_layout.addWidget(self.orig_img_label)
-        img_layout.addWidget(self.img_label)
+        # img_layout.addWidget(self.img_label)
         img_layout.addLayout(palettes_layout)
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(load_img_btn)
         btn_layout.addWidget(save_img_btn)
+        btn_layout.addWidget(recolor_img_btn)
         btn_layout.addWidget(quit_btn)
         app_layout = QVBoxLayout()
         app_layout.addLayout(img_layout)
@@ -106,17 +112,18 @@ class PaletteRecoloring(QWidget):
         if file_name == '':
             return
         im = Image.open(file_name)
-        im = im.resize((round(im.size[0] * 150 / im.size[1]), round(im.size[1] * 150 / im.size[1])),
-                              Image.ANTIALIAS)
-        img_rgb = im.convert("RGBA")
+        img_rgb = im.resize((round(im.size[0] * 500 / im.size[1]), round(im.size[1] * 500 / im.size[1])),
+                            Image.ANTIALIAS)
+        img_rgb = img_rgb.convert("RGBA")
         self.image = im.convert("RGB")
         # self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
-        self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
+        # self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
         # get the palettes based on knn
         palettes_colors = build_palettes(self.image, self.k, self.bins)
         for idx, (palette, color) in enumerate(zip(self.palettes, palettes_colors)):
             palette.setColor(LABtoRGB(color))
             self.palettes_colors[idx] = tuple(color)
+            self.palettes_colors_cur[idx] = tuple(color)
 
     def save_image(self):
         file_name = QFileDialog.getSaveFileName()[0]
@@ -125,15 +132,20 @@ class PaletteRecoloring(QWidget):
     def recolor(self, palette_idx, palette_color):
         print(f'recolor palette:{palette_idx} to {palette_color}')
         # change the lumin
-        palettes_colors_lab = modify_lumin(self.palettes_colors, palette_idx, palette_color)
+        palettes_colors_lab = modify_lumin(self.palettes_colors_cur, palette_idx, palette_color)
         # change the modified palettes' colors
         for palette, color in zip(self.palettes, palettes_colors_lab):
             palette.setColor(LABtoRGB(color))
-        modified_img = image_recolor(self.image, self.palettes_colors, palettes_colors_lab, palette_idx)
-        # modified_img = modified_img.convert('RGB')
-        self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(modified_img)).scaledToHeight(500))
-        self.palettes_colors[:] = palettes_colors_lab[:]
-        modified_img.save('1.jpg')
+        self.palettes_colors_cur[:] = palettes_colors_lab[:]
+
+    def transfer(self):
+        im = image_recolor(self.image, self.palettes_colors, self.palettes_colors_cur)
+        modified_img = im.resize((round(im.size[0] * 500 / im.size[1]), round(im.size[1] * 500 / im.size[1])),
+                                 Image.ANTIALIAS)  # change the displayed picture's resolution
+        self.modified_img = im
+        self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(modified_img)).scaledToHeight(500))
+        im.save('1.jpg')
+        # self.palettes_colors[:] = self.palettes_colors_cur[:]
 
 
 # 按间距中的绿色按钮以运行脚本。

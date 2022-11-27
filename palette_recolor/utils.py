@@ -12,8 +12,9 @@ def rgb_img_to_lab(image):
 
 
 def lab_img_to_rgb(image):
-    # return color.lab2rgb(image)
-    return (color.lab2rgb(image) * 255).astype(np.int8)
+    RGB_p = ImageCms.createProfile('sRGB')
+    LAB_p = ImageCms.createProfile('LAB')
+    return ImageCms.profileToProfile(image, LAB_p, RGB_p, outputMode='RGB')
 
 
 def LABtoXYZ(LAB):
@@ -74,6 +75,10 @@ def XYZtoLAB(XYZ, clip=True):
 
 def RGBtoLAB(RGB, clip=True):
     return XYZtoLAB(RGBtoXYZ(RGB), clip)
+
+
+def ByteLAB(LAB):
+    return int(LAB[0] / 100 * 255), int(LAB[1] + 128), int(LAB[2] + 128)
 
 
 def ValidRGB(RGB):
