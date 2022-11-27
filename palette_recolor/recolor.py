@@ -150,17 +150,18 @@ def image_recolor(img: Image, palette_orig_lab, palette_new_lab, grid_n=16):
         res = np.zeros((k, 3))
         wei = np.zeros((k, 1))
         c_lab = np.array(RGBtoLAB(c_rgb))
+        # iterate to calculate multiple color changes
         for p in range(k):
             v = modify_AB(c_lab, copy.deepcopy(palettes_lab_orig[p + 1]),
-                          copy.deepcopy(palettes_lab_new[p + 1]))
-            wei[p] = omega(palettes_lab_orig[1:-1], lmbda[p, :], c_lab, sigma)
+                          copy.deepcopy(palettes_lab_new[p + 1]))  # get the effect of single color
+            wei[p] = omega(palettes_lab_orig[1:-1], lmbda[p, :], c_lab, sigma)  # get weights
             res[p] = v
         # normalize weights
         wei[wei < 0] = 0
         if wei.sum() == 0:
             wei[:] = 1.
         wei /= wei.sum()
-        res = np.sum(res * wei, axis=0)
+        res = np.sum(res * wei, axis=0)  # get average
         res[0] = L_sample[i]
         sample_colors_map[tuple(c_rgb)] = res
 
