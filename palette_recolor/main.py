@@ -61,7 +61,7 @@ class PaletteRecoloring(QWidget):
         qr.moveCenter(QDesktopWidget().availableGeometry().center())
         self.move(qr.topLeft())
         # labels for images
-        # self.img_label = QLabel(self)
+        self.img_label = QLabel(self)
         self.orig_img_label = QLabel(self)
         # labels for palettes
         self.palettes = []
@@ -94,7 +94,7 @@ class PaletteRecoloring(QWidget):
         # set layouts
         img_layout = QHBoxLayout()
         img_layout.addWidget(self.orig_img_label)
-        # img_layout.addWidget(self.img_label)
+        img_layout.addWidget(self.img_label)
         img_layout.addLayout(palettes_layout)
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(load_img_btn)
@@ -117,7 +117,7 @@ class PaletteRecoloring(QWidget):
         img_rgb = img_rgb.convert("RGBA")
         self.image = im.convert("RGB")
         # self.img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
-        # self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
+        self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(img_rgb)).scaledToHeight(500))
         # get the palettes based on knn
         palettes_colors = build_palettes(self.image, self.k, self.bins)
         for idx, (palette, color) in enumerate(zip(self.palettes, palettes_colors)):
@@ -128,6 +128,7 @@ class PaletteRecoloring(QWidget):
     def save_image(self):
         file_name = QFileDialog.getSaveFileName()[0]
         print(file_name)
+        self.modified_img.save(file_name)
 
     def recolor(self, palette_idx, palette_color):
         print(f'recolor palette:{palette_idx} to {palette_color}')
@@ -143,8 +144,8 @@ class PaletteRecoloring(QWidget):
         modified_img = im.resize((round(im.size[0] * 500 / im.size[1]), round(im.size[1] * 500 / im.size[1])),
                                  Image.ANTIALIAS)  # change the displayed picture's resolution
         self.modified_img = im
-        self.orig_img_label.setPixmap(QPixmap.fromImage(ImageQt.ImageQt(modified_img)).scaledToHeight(500))
         im.save('1.jpg')
+        self.img_label.setPixmap(QPixmap('1.jpg').scaledToHeight(500))
         # self.palettes_colors[:] = self.palettes_colors_cur[:]
 
 
