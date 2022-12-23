@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import jittor as jt
+# import maxflow
 
 
 def ssd(img1, img2):
@@ -24,27 +25,31 @@ def conv2d(x, w):
 
 
 def to_lab(img):
-    return cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    return cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
 
 
 def get_best_match(orig, fillup, mask):
     # scale = [0.81, 0.9, 1.]
     # get best match. Use FFT to quickly get ssd
-    fillup_lab = to_lab(fillup)
-    orig_lab = to_lab(orig)
+    fillup_lab = to_lab(fillup).astype(np.float32)
+    orig_lab = to_lab(orig).astype(np.float32)
     M = (mask > 0)
     BM = orig_lab * M
     B2M = np.sum(np.square(orig_lab), axis=2, keepdims=True) * M[:, :, :1]
-    kern = jt.ones_like(M[:, :, :1, np.newaxis])
+    kern = jt.ones_like(B2M[..., np.newaxis])
     B2M_res = conv2d(jt.float32(B2M[np.newaxis, ...]), kern)
 
-    A2 = np.sum(np.square(fillup_lab), axis=2, keepdims=True)
-    A2M_res = conv2d(jt.float32(A2[np.newaxis, ...]), jt.float32(M[::-1, ::-1, 0:1, np.newaxis]))
+    A2 = np.square(fillup_lab)
+    A2M_res = conv2d(jt.float32(A2[np.newaxis, ...]), jt.float32(M[::-1, ::-1, :, np.newaxis]))
     ABM_res = conv2d(jt.float32(fillup_lab[np.newaxis, ...]), jt.float32(BM[::-1, ::-1, :, np.newaxis]))
 
     res = A2M_res + B2M_res - 2 * ABM_res
 
-    return jt.max(res)
+    res_w, res_h, _, _ = res.shape
+    scene_w, scene_h, _ = orig.shape
+    idx_min = np.argmin(res.data)
+    idx_min = idx_min // res_h, idx_min % res_h
+    return idx_min
 
 
 def get_best_match_prim(orig_scene, match):
@@ -75,8 +80,10 @@ def get_best_match_prim(orig_scene, match):
                 best_sample = imageA
                 best_x = x
                 best_y = y
-    return best_x, best_y, best_sample
+    return best_x, best_y, best_sample, min_ssd
+    # 199, 0, 1132227401.0
 
 
-def graph_cut(img1, img2, mask):
-    pass
+def graph_cut(orig_scene, fillup_scene, mask_scene):
+    diff = np.absolute(orig_scene - fillup_scene).sum(axis=2)
+    shape = mask_scene.shape

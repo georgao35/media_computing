@@ -3,8 +3,9 @@ import os
 import cv2
 import numpy as np
 import time
+import pickle
 
-from context_matching import get_best_match, get_best_match_prim
+from context_matching import get_best_match, get_best_match_prim, graph_cut
 
 
 def load_imgs(idx, base_dir='data'):
@@ -50,10 +51,22 @@ def tok(name="(undefined)"):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    orig_src, mask_src, fillups = load_imgs(1)
+    data_i = 1
+    orig_src, mask_src, fillups = load_imgs(data_i)
     orig_scene, mask_scene, mask_dilated = preprocess(orig_src, mask_src)
-    tik()
-    a = get_best_match(orig_scene, fillups[0], mask_dilated)
-    tok("jittor FFT")
+    best_match_loc = []
+    for i, fillup in enumerate(fillups):
+        tik()
+        idx_min = get_best_match(orig_scene, fillup, mask_dilated)
+        tok("jittor FFT")
+        best_match_loc.append(idx_min)
+        print(idx_min)
+    with open(f'match/{data_i}/best_match_loc.pkl') as f:
+        pickle.dump(best_match_loc, f)
     # a = get_best_match_prim(orig_scene * (mask_dilated > 0), fillups[0])
-    print(a)
+    # tok("naive")
+    # cv2.imshow('match', fillups[1])
+    # cv2.imshow('test', a[1])
+    # cv2.imshow('orig', orig_scene)
+    # cv2.waitKey(0)
+    # print(a)
