@@ -4,8 +4,11 @@ import cv2
 import numpy as np
 import time
 import pickle
+import jittor as jt
+from IPython import embed
 
 from context_matching import get_best_match, get_best_match_prim, graph_cut
+from picture_merging import poisson_blending
 
 
 def load_imgs(idx, base_dir='data'):
@@ -20,24 +23,39 @@ def load_imgs(idx, base_dir='data'):
 
 def preprocess(orig, mask, local_context_size=80):
     orig = np.copy(orig)
-    mask = np.copy(mask)
-    w, h, c = mask.shape
+    mask = np.copy(mask)[:, :, 0]
+    w, h = mask.shape
 
-    masked_range = np.where(mask == 0)
-    x_min = max(min(masked_range[0]) - local_context_size, 0)
-    x_max = min(max(masked_range[0]) + local_context_size, w-1)
-    y_min = max(min(masked_range[1]) - local_context_size, 0)
-    y_max = min(max(masked_range[1]) + local_context_size, h-1)
+    mask = 255 - mask
+    mask = (mask > 0).astype('uint8')
+    # dilation with layer to distinguish two patches during graph cut
+    mask_boundary = cv2.dilate(mask, np.ones((3, 3), dtype=np.uint8))
+    mask_dilated = cv2.dilate(mask_boundary, np.ones((3, 3), dtype=np.uint8), iterations=local_context_size - 2)
+    mask_res = cv2.dilate(mask_dilated, np.ones((3, 3), dtype=np.uint8))
 
-    orig_win = orig[x_min:x_max, y_min:y_max]
-    mask = mask[x_min:x_max, y_min:y_max]
-    mask_dilated = cv2.dilate(255 - mask, np.ones((local_context_size, local_context_size), dtype=np.uint8))
+    mask_res *= 3
+    mask_res[(mask_res > 0) & (mask_dilated == 0)] = 1
+    mask_res[(mask_boundary > 0) & (mask == 0)] = 2
+    masked_range = np.where(mask_res > 0)
+    mask_res[mask > 0] = 0
 
-    # cv2.imshow('dilate', orig_win * (mask_dilated > 0))
-    # cv2.imshow('orig', mask)
+    # x_min = max(min(masked_range[0]) - local_context_size, 0)
+    # x_max = min(max(masked_range[0]) + local_context_size, w-1)
+    # y_min = max(min(masked_range[1]) - local_context_size, 0)
+    # y_max = min(max(masked_range[1]) + local_context_size, h-1)
+    x_min, x_max, y_min, y_max = min(masked_range[0]), max(masked_range[0])+1, min(masked_range[1]), max(masked_range[1])+1
+
+    orig_window = orig[x_min:x_max, y_min:y_max]
+    mask_res = mask_res[x_min:x_max, y_min:y_max]
+    mask_orig = mask[x_min:x_max, y_min:y_max]
+
+    # cv2.imshow('res', mask_res * 83)
+    # cv2.imshow('orig', mask.astype('uint8') * 255)
+    # cv2.imshow('dilate', mask_dilated.astype('uint8') * 255)
+    # cv2.imshow('boundary', mask_boundary.astype('uint8') * 255)
     # cv2.waitKey(0)
 
-    return orig_win, mask, mask_dilated
+    return orig_window, mask_orig, mask_res, (x_min, x_max, y_min, y_max)
 
 
 def tik():
@@ -52,21 +70,70 @@ def tok(name="(undefined)"):
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     data_i = 1
+    Load = True
     orig_src, mask_src, fillups = load_imgs(data_i)
-    orig_scene, mask_scene, mask_dilated = preprocess(orig_src, mask_src)
-    best_match_loc = []
-    for i, fillup in enumerate(fillups):
-        tik()
-        idx_min = get_best_match(orig_scene, fillup, mask_dilated)
-        tok("jittor FFT")
-        best_match_loc.append(idx_min)
-        print(idx_min)
-    with open(f'match/{data_i}/best_match_loc.pkl') as f:
-        pickle.dump(best_match_loc, f)
+    orig_scene, mask_orig, mask_context, scene_range = preprocess(orig_src, mask_src)
+    best_match_loc, candidate_scenes = [], []
+    roiw, roih, _ = orig_scene.shape
+
+    jt.flags.use_cuda = 0
+    if os.path.exists(f'match/{data_i}/best_match_loc.pkl') and Load:
+        with open(f'match/{data_i}/best_match_loc.pkl', 'rb') as f:
+            best_match_loc = pickle.load(f)
+        for i in range(len(best_match_loc)):
+            match_scene = np.load(f'match/{data_i}/best_scene_{i}.npy')
+            # padding: some matched parts are not the same as the mask
+            if roiw > match_scene.shape[0]:
+                match_scene = np.pad(match_scene, [(0, roiw - match_scene.shape[0]), (0, 0), (0, 0)],
+                                     'reflect')
+            if roih > match_scene.shape[1]:
+                match_scene = np.pad(match_scene, [(0, 0), (0, roih - match_scene.shape[1]), (0, 0)],
+                                     'reflect')
+            match_scene = match_scene[:roiw, :roih]
+            candidate_scenes.append(match_scene)
+    else:
+        for i, fillup in enumerate(fillups):
+            scale = max(roiw / fillup.shape[0], roih / fillup.shape[1])
+            if scale > 1.0:
+                # if the candidate is smaller, make it bigger
+                fillup = cv2.resize(fillup, (0, 0), fx=scale * 1.1, fy=scale * 1.1)
+            tik()
+            idx_min = get_best_match(orig_scene, fillup, (mask_context > 0))
+            # idx_min = get_best_match_prim(orig_scene * (mask_dilated > 0), fillups[0])
+            tok("jittor FFT")
+            best_match_loc.append(idx_min)
+            best_match_scene = fillup[idx_min[0]: idx_min[0] + roiw,
+                                      idx_min[1]: idx_min[1] + roih]
+            candidate_scenes.append(best_match_scene)
+            np.save(f'match/{data_i}/best_scene_{i}.npy', best_match_scene)
+            print(idx_min, best_match_scene.shape)
+        with open(f'match/{data_i}/best_match_loc.pkl', 'wb') as f:
+            pickle.dump(best_match_loc, f)
     # a = get_best_match_prim(orig_scene * (mask_dilated > 0), fillups[0])
     # tok("naive")
-    # cv2.imshow('match', fillups[1])
-    # cv2.imshow('test', a[1])
-    # cv2.imshow('orig', orig_scene)
-    # cv2.waitKey(0)
+    cv2.imshow('orig_scene', orig_scene)
     # print(a)
+    # generate graph cut
+    for candidate in candidate_scenes:
+        pass
+    segment_res, flow_cost = graph_cut(orig_scene, candidate_scenes[0], mask_context)
+    segment_res[mask_orig > 0] = 2
+    print(segment_res)
+    # cv2.imshow('segmentation', segment_res * 126)
+    # cv2.waitKey(0)
+    # merge
+    poisson_blend_mask = (segment_res == 2).astype('uint8') * 255
+    print(scene_range)
+
+    jt.flags.use_cuda = 1
+    i = 5
+    blend_res = poisson_blending(orig_src, candidate_scenes[i], poisson_blend_mask, (scene_range[0], scene_range[2]))
+    cv2.imshow('own_blend', blend_res)
+    # cv2.waitKey(0)
+
+    res = cv2.seamlessClone(candidate_scenes[i], orig_src, poisson_blend_mask[..., np.newaxis],
+                            ((scene_range[2] + scene_range[3]) // 2, (scene_range[0] + scene_range[1]) // 2),
+                            cv2.NORMAL_CLONE)
+    cv2.imshow('blend', res)
+    cv2.imshow('blend_mask', poisson_blend_mask)
+    cv2.waitKey(0)
