@@ -69,7 +69,7 @@ def tok(name="(undefined)"):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    data_i = 1
+    data_i = 4
     Load = True
     orig_src, mask_src, fillups = load_imgs(data_i)
     orig_scene, mask_orig, mask_context, scene_range = preprocess(orig_src, mask_src)
@@ -114,26 +114,29 @@ if __name__ == '__main__':
     cv2.imshow('orig_scene', orig_scene)
     # print(a)
     # generate graph cut
-    for candidate in candidate_scenes:
-        pass
-    segment_res, flow_cost = graph_cut(orig_scene, candidate_scenes[0], mask_context)
-    segment_res[mask_orig > 0] = 2
-    print(segment_res)
+    if os.path.exists(f'match/{data_i}/segments.pkl') and Load:
+        with open(f'match/{data_i}/segments.pkl', 'rb') as f:
+            segments = pickle.load(f)
+    else:
+        segments = []
+        for candidate in candidate_scenes:
+            segment_res, flow_cost = graph_cut(orig_scene, candidate, mask_context)
+            segment_res[mask_orig > 0] = 2
+            segments.append(segment_res)
+        with open(f'match/{data_i}/segments.pkl', 'wb') as f:
+            pickle.dump(segments, f)
     # cv2.imshow('segmentation', segment_res * 126)
     # cv2.waitKey(0)
     # merge
-    poisson_blend_mask = (segment_res == 2).astype('uint8') * 255
     print(scene_range)
-
     jt.flags.use_cuda = 1
-    i = 5
-    blend_res = poisson_blending(orig_src, candidate_scenes[i], poisson_blend_mask, (scene_range[0], scene_range[2]))
-    cv2.imshow('own_blend', blend_res)
+    for i in range(len(candidate_scenes)):
+        print(f'blending: {i}')
+        segment_res = segments[i]
+        poisson_blend_mask = (segment_res == 2).astype('uint8') * 255
+        blend_res = poisson_blending(orig_src, candidate_scenes[i], poisson_blend_mask, (scene_range[0], scene_range[2]))
+        cv2.imwrite(f'data/output{data_i}/{i}.png', blend_res)
+    # cv2.imshow('own_blend', blend_res)
     # cv2.waitKey(0)
 
-    res = cv2.seamlessClone(candidate_scenes[i], orig_src, poisson_blend_mask[..., np.newaxis],
-                            ((scene_range[2] + scene_range[3]) // 2, (scene_range[0] + scene_range[1]) // 2),
-                            cv2.NORMAL_CLONE)
-    cv2.imshow('blend', res)
-    cv2.imshow('blend_mask', poisson_blend_mask)
-    cv2.waitKey(0)
+    # cv2.waitKey(0)
