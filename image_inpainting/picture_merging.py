@@ -3,12 +3,6 @@ import jittor as jt
 import jsparse.nn.functional as F
 from tqdm import tqdm
 
-from IPython import embed
-
-
-def simple_test(orig, match, segment_mask, left_top_pos):
-    pass
-
 
 def adjacency(x, y):
     return [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
@@ -19,6 +13,7 @@ def in_mask(idx, mask):
 
 
 def on_edge(idx, mask):
+    # determine if the point is on the edge
     if not in_mask(idx, mask):
         return False
     w, h = mask.shape
@@ -40,8 +35,7 @@ def poisson_matrix(points, mask):
         point_map_rev[point] = i
 
     for i, point in tqdm(enumerate(points), total=n):
-        # indices.append((i, i))
-        # vals.append(4)
+        # add adjacent vertices to sparse matrix
         for adjacent in adjacency(*point):
             if 0 <= adjacent[0] < w and 0 <= adjacent[1] < h and in_mask(adjacent, mask):
                 j = point_map_rev[adjacent]
@@ -56,12 +50,11 @@ def get_b(points, src, target, mask, left_top_pos):
     src = src.copy().astype(np.float32)
     target = np.copy(target).astype(np.float32)
     w, h = src.shape
-    # w, h, c = src.shape
-    # b = np.zeros((n, c))
     b = np.zeros(n)
     for idx, point in tqdm(enumerate(points), total=n):
         i, j = point
         res = 4 * src[i, j]
+        # calculate grad differences between adjacent vertices
         for adjacent in adjacency(i, j):
             if 0 <= adjacent[0] < w and 0 <= adjacent[1] < h:
                 res -= src[adjacent]
@@ -84,7 +77,7 @@ def sparse_matmul(rows, cols, values, vec):
                   mat=vec, cuda_spmm_alg=1)
 
 
-def laplace_solver(A, b, x0, iter_num=6000):
+def jacobian_solver(A, b, x0, iter_num=6000):
     indices, vals = A['indices'], A['vals']
     with jt.no_grad():
         rows = jt.int32(indices[:, 0])
@@ -92,9 +85,10 @@ def laplace_solver(A, b, x0, iter_num=6000):
         vals = jt.float32(vals)
         x = jt.float32(x0)
         b = jt.array(b)
-        # while True:
+        # run iter_num iterations
         for i in tqdm(range(iter_num)):
             res = sparse_matmul(rows, cols, vals, x)
+            # update x_prime, early stop when error is small
             x_prime = (res + b) / 4
             delta = x_prime.data - x.data
             if np.linalg.norm(delta) < 0.1:
@@ -108,22 +102,20 @@ def laplace_solver(A, b, x0, iter_num=6000):
 
 
 def poisson_blending(orig: np.ndarray, match: np.ndarray, segment_mask: np.ndarray, left_top_pos):
-    # get div of match picture
     roi_w, roi_h, c = match.shape
     img_w, img_h, img_c = orig.shape
-
+    # get region of interests in the match picture
     segmented_indices = np.nonzero(segment_mask)
     x0 = match[segmented_indices]
     segmented_indices = list(zip(segmented_indices[0], segmented_indices[1]))
     num_pixels = len(segmented_indices)
-    # get laplace matrix A
+    # get poisson matrix A
     A = poisson_matrix(segmented_indices, segment_mask)
-    # get b
+    # get gradient of each channel
     bs = [get_b(segmented_indices, match[:, :, i], orig[:, :, i], segment_mask, left_top_pos) for i in range(c)]
     # b = get_b(segmented_indices, match, orig, segment_mask, left_top_pos)
-    # solve x=A\b
-    # x = np.concatenate([laplace_solver(A, b, x0[:, i:i+1]) for i, b in enumerate(bs)], axis=1)  # by channel
-    x = laplace_solver(A, np.concatenate(bs, axis=1), x0)
+    # solve x=(4 - A)\b by jacobian iteration
+    x = jacobian_solver(A, np.concatenate(bs, axis=1), x0)
     composite = orig.copy().astype(np.uint8)
     for i, point in enumerate(segmented_indices):
         abs_point = (point[0]+left_top_pos[0], point[1]+left_top_pos[1])

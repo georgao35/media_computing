@@ -37,13 +37,11 @@ def get_best_match(orig, fillup, mask):
     B2M_res = conv2d(jt.float32(B2M[np.newaxis, ...]), kern)
 
     A2 = np.square(fillup_lab)
-    # print(fillup_lab.shape, BM.shape)
     ABM_res = conv2d(jt.float32(fillup_lab[np.newaxis, ...]), jt.float32(BM[::-1, ::-1, :, np.newaxis]))
     A2M_res = conv2d(jt.float32(A2[np.newaxis, ...]), jt.float32(M[::-1, ::-1, :, np.newaxis]))
-
+    # calculate result
     res = A2M_res + B2M_res - 2 * ABM_res
-    # print(res.shape)
-
+    # get min index
     _, res_w, res_h, _ = res.shape
     scene_w, scene_h, _ = orig.shape
     idx_min = np.argmin(res.data.squeeze())
@@ -65,12 +63,10 @@ def get_best_match_prim(orig_scene, match):
     r, c, _ = match.shape
     ir, ic, _ = image_to_compare.shape
     best_x, best_y, best_sample, min_ssd = 0, 0, None, math.inf
-    for x in range(r):
-        for y in range(c):
+    # iterate through all possible position
+    for x in range(r - ir):
+        for y in range(c - ic):
             A = match[x:x + ir, y:y + ic, :]
-
-            if A.shape[0] != ir or A.shape[1] != ic:
-                continue
             # calculate ssd with mask
             current_ssd = ssd(A, image_to_compare)
             if current_ssd is None:
@@ -80,7 +76,7 @@ def get_best_match_prim(orig_scene, match):
                 best_sample = A
                 best_x = x
                 best_y = y
-    return best_x, best_y, best_sample, min_ssd
+    return best_x, best_y
 
 
 def graph_cut(orig_scene, fillup_scene, mask_scene):
@@ -122,5 +118,4 @@ def graph_cut(orig_scene, fillup_scene, mask_scene):
     seg_pic = np.zeros_like(mask_scene)
     for i, result in enumerate(segmentation_result):
         seg_pic[nodemap[i][0], nodemap[i][1]] = result
-    # seg_pic[mask_scene == 0] = 2
     return seg_pic, flow

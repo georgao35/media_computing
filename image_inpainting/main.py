@@ -1,11 +1,9 @@
-import copy
 import os
 import cv2
 import numpy as np
 import time
 import pickle
 import jittor as jt
-from IPython import embed
 
 from context_matching import get_best_match, get_best_match_prim, graph_cut
 from picture_merging import poisson_blending
@@ -44,16 +42,10 @@ def preprocess(orig, mask, local_context_size=80):
     # y_min = max(min(masked_range[1]) - local_context_size, 0)
     # y_max = min(max(masked_range[1]) + local_context_size, h-1)
     x_min, x_max, y_min, y_max = min(masked_range[0]), max(masked_range[0])+1, min(masked_range[1]), max(masked_range[1])+1
-
+    # get sliced scene and mask
     orig_window = orig[x_min:x_max, y_min:y_max]
     mask_res = mask_res[x_min:x_max, y_min:y_max]
     mask_orig = mask[x_min:x_max, y_min:y_max]
-
-    # cv2.imshow('res', mask_res * 83)
-    # cv2.imshow('orig', mask.astype('uint8') * 255)
-    # cv2.imshow('dilate', mask_dilated.astype('uint8') * 255)
-    # cv2.imshow('boundary', mask_boundary.astype('uint8') * 255)
-    # cv2.waitKey(0)
 
     return orig_window, mask_orig, mask_res, (x_min, x_max, y_min, y_max)
 
@@ -78,6 +70,7 @@ if __name__ == '__main__':
 
     jt.flags.use_cuda = 0
     if os.path.exists(f'match/{data_i}/best_match_loc.pkl') and Load:
+        # load from previous saved results
         with open(f'match/{data_i}/best_match_loc.pkl', 'rb') as f:
             best_match_loc = pickle.load(f)
         for i in range(len(best_match_loc)):
@@ -95,11 +88,10 @@ if __name__ == '__main__':
         for i, fillup in enumerate(fillups):
             scale = max(roiw / fillup.shape[0], roih / fillup.shape[1])
             if scale > 1.0:
-                # if the candidate is smaller, make it bigger
+                # if the candidate is smaller than required, make it bigger
                 fillup = cv2.resize(fillup, (0, 0), fx=scale * 1.1, fy=scale * 1.1)
             tik()
             idx_min = get_best_match(orig_scene, fillup, (mask_context > 0))
-            # idx_min = get_best_match_prim(orig_scene * (mask_dilated > 0), fillups[0])
             tok("jittor FFT")
             best_match_loc.append(idx_min)
             best_match_scene = fillup[idx_min[0]: idx_min[0] + roiw,
@@ -109,11 +101,7 @@ if __name__ == '__main__':
             print(idx_min, best_match_scene.shape)
         with open(f'match/{data_i}/best_match_loc.pkl', 'wb') as f:
             pickle.dump(best_match_loc, f)
-    # a = get_best_match_prim(orig_scene * (mask_dilated > 0), fillups[0])
-    # tok("naive")
-    cv2.imshow('orig_scene', orig_scene)
-    # print(a)
-    # generate graph cut
+    # generate graph cut, and save it
     if os.path.exists(f'match/{data_i}/segments.pkl') and Load:
         with open(f'match/{data_i}/segments.pkl', 'rb') as f:
             segments = pickle.load(f)
@@ -125,9 +113,7 @@ if __name__ == '__main__':
             segments.append(segment_res)
         with open(f'match/{data_i}/segments.pkl', 'wb') as f:
             pickle.dump(segments, f)
-    # cv2.imshow('segmentation', segment_res * 126)
-    # cv2.waitKey(0)
-    # merge
+    # do poisson blending
     print(scene_range)
     jt.flags.use_cuda = 1
     for i in range(len(candidate_scenes)):
@@ -136,7 +122,3 @@ if __name__ == '__main__':
         poisson_blend_mask = (segment_res == 2).astype('uint8') * 255
         blend_res = poisson_blending(orig_src, candidate_scenes[i], poisson_blend_mask, (scene_range[0], scene_range[2]))
         cv2.imwrite(f'data/output{data_i}/{i}.png', blend_res)
-    # cv2.imshow('own_blend', blend_res)
-    # cv2.waitKey(0)
-
-    # cv2.waitKey(0)
